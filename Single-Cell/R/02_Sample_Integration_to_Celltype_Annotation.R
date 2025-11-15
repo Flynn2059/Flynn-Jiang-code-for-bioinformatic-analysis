@@ -6,6 +6,7 @@ gc()
 setwd("/Volumes/FlynnDisk/Red/")
 getwd()
 library(qs)
+library(SCP)
 library(dplyr)
 library(Seurat)
 library(ggpubr)
@@ -93,7 +94,17 @@ for (i in 1:nrow(meta_supp)) {
 Idents(seurat_obj) <- 'celltype_major'
 
 # 看看注释情况
-plot4=DimPlot(seurat_obj,group.by = "celltype_major",label = T)&NoLegend()
+plot4=CellDimPlot(
+  seurat_obj,
+  group.by = "celltype_major",
+  theme_use = "theme_blank",
+  xlab = "UMAP1",
+  ylab = "UMAP2",
+  label = TRUE,           
+  label_insitu = TRUE,
+  show_stat = F,      
+  legend.position = "none" 
+)
 plot5=DotPlot(object = seurat_obj,
               features = known_markers,
               scale=T,
