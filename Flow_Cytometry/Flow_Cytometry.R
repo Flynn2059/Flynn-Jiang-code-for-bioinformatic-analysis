@@ -28,7 +28,7 @@ suppressPackageStartupMessages({
 head(data)
 
 # ==== 当作Seurat对象读取进去 ====
-seurat_obj=CreateSeuratObject(counts = combined_data)
+seurat_obj=CreateSeuratObject(counts = data)
 print(seurat_obj)
 # 跳过质控部分，应该在FlowJo里完成
 # 需要去除碎片，多胞和死细胞；如果有需要也可以先筛选出自己感兴趣的细胞类型

@@ -24,4 +24,4 @@ This workflow is inspired by the [Seurat multimodal vignette](https://satijalab.
 
 ---
 
-Happy analyzing! 🧬🔬 
+# Happy analyzing! 🧬🔬 
