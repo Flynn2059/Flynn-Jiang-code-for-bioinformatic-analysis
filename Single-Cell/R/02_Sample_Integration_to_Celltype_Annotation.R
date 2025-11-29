@@ -1,12 +1,11 @@
 # ==== 加载配置和工作环境 ====
 Sys.setenv(LANGUAGE = "en")
 options(stringsAsFactors = FALSE)
-rm(list=ls())
-gc()
-setwd("/Volumes/FlynnDisk/Red/")
+rm(list=ls());gc()
+setwd("/mnt/bioSSD/VisiumHD/ref/")
 getwd()
+# ===== 加载我们要用到的包 ====
 library(qs)
-library(SCP)
 library(dplyr)
 library(Seurat)
 library(ggpubr)
@@ -16,35 +15,43 @@ library(harmony)
 library(patchwork)
 library(RColorBrewer)
 
+# 查看工作路径下的文件
+list.files()
+
 # ==== 读取数据 ====
-non_respond=qread("./Non_Respond/Non_Respond_post_QC.qs")
-respond=qread("./Respond/Respond_post_QC.qs")
-seurat_list=list(non_respond,respond)
+GSM8899426=qread("GSM8899426_post_QC.qs")
+GSM8899427=qread("GSM8899427_post_QC.qs")
+GSM8899428=qread("GSM8899428_post_QC.qs")
+GSM8899429=qread("GSM8899429_post_QC.qs")
+GSM8899430=qread("GSM8899430_post_QC.qs")
+GSM8899431=qread("GSM8899431_post_QC.qs")
+
+seurat_list=list(GSM8899426,GSM8899427,GSM8899428,GSM8899429,GSM8899430,GSM8899431)
 seurat_obj=Reduce(merge,seurat_list)
 print(seurat_obj)
-
+table(seurat_obj@meta.data$orig.ident)
 # ==== 降维聚类+去除批次效应 ====
 seurat_obj[["RNA"]]=JoinLayers(seurat_obj[["RNA"]])
 seurat_obj=NormalizeData(seurat_obj,normalization.method = "LogNormalize",
-                       scale.factor = median(seurat_obj@meta.data$nCount_RNA))
+                         scale.factor = median(seurat_obj@meta.data$nCount_RNA))
 seurat_obj=FindVariableFeatures(seurat_obj,nfeatures=3000)
-# 我们发现在亚群注释的过程中，如果按照上面的结果直接去做细胞注释
-# 会有一些奇奇怪怪的细胞高表达非经典神经内分泌marker
-# 我们觉得这样的结果不反映我们的生物学现象，而且这些细胞恰好高表达核糖体基因
-# 所以我们希望去除核糖体基因和细胞周期基因对降维聚类的影响
+# 我们希望降维聚类的结果反映我们感兴趣的生物的问题
+# 而线粒体、核糖体基因和细胞周期往往会干扰我们发现一些有意义的内容
+# 所以我们希望去除这些基因对降维聚类的影响
+# 我们可以直接删除表达矩阵，但是这样可能会影响后续的分析（比如轨迹分析）
 # 计算细胞周期评分
 s.genes <- cc.genes.updated.2019$s.genes
 g2m.genes <- cc.genes.updated.2019$g2m.genes
 seurat_obj[["percent_ribo"]]=PercentageFeatureSet(seurat_obj, pattern = "^RPS|^RPL")
 seurat_obj <- CellCycleScoring(seurat_obj, s.features = s.genes, g2m.features = g2m.genes)
 # 回归掉不感兴趣的变量
-seurat_obj <- ScaleData(seurat_obj, vars.to.regress = c("S.Score", "G2M.Score","percent_ribo"))
+seurat_obj <- ScaleData(seurat_obj, vars.to.regress = c("S.Score", "G2M.Score","percent_ribo","percent_mt"))
 # 使用HVG去跑PCA
 seurat_obj=RunPCA(seurat_obj)
 ElbowPlot(seurat_obj,ndims = 50)
-seurat_obj=RunHarmony(seurat_obj,group.by.vars="orig.ident")
-seurat_obj=RunUMAP(seurat_obj,dims=1:8,verbose = T,reduction = "harmony")
-seurat_obj=FindNeighbors(seurat_obj,dims = 1:8,reduction = "harmony")
+seurat_obj=RunHarmony(seurat_obj,group.by.vars="orig.ident",max_iter=20)
+seurat_obj=RunUMAP(seurat_obj,dims=1:6,verbose = T,reduction = "harmony")
+seurat_obj=FindNeighbors(seurat_obj,dims = 1:6,reduction = "harmony")
 seurat_obj=FindClusters(seurat_obj,resolution = 0.1)
 table(seurat_obj@meta.data$seurat_clusters)
 plot1=DimPlot(seurat_obj,reduction = "umap",group.by = "orig.ident",label = T)
@@ -70,15 +77,8 @@ plot3=DotPlot(object = seurat_obj,
   theme_pubr()+
   theme(axis.text.x = element_text(angle=90)) & NoLegend()
 
-
-plot3=DotPlot(object = seurat_obj,
-              features = known_markers,
-              scale=T,
-              group.by = "seurat_clusters")+
-  scale_color_gradientn(colors=brewer.pal(9,"Blues"))+
-  theme_pubr()+
-  theme(axis.text.x = element_text(angle=90)) & NoLegend()
 plot2|plot3
+
 # 邱同学风格的细胞注释
 meta_supp = data.frame(seurat_cluster = 0:(length(unique(seurat_obj$seurat_clusters)) - 1), celltype = NA)
 meta_supp[meta_supp$seurat_cluster %in% c(0), 'celltype'] = 'B'
@@ -94,17 +94,7 @@ for (i in 1:nrow(meta_supp)) {
 Idents(seurat_obj) <- 'celltype_major'
 
 # 看看注释情况
-plot4=CellDimPlot(
-  seurat_obj,
-  group.by = "celltype_major",
-  theme_use = "theme_blank",
-  xlab = "UMAP1",
-  ylab = "UMAP2",
-  label = TRUE,           
-  label_insitu = TRUE,
-  show_stat = F,      
-  legend.position = "none" 
-)
+plot4=DimPlot(seurat_obj,group.by = "celltype_major",label = T)&NoLegend()
 plot5=DotPlot(object = seurat_obj,
               features = known_markers,
               scale=T,
